@@ -1,0 +1,124 @@
+---
+title: "Relationships Between Ethnicity and Confidence in Educational Institutions in the United States"
+output: 
+  html_document: 
+    fig_height: 4
+    highlight: pygments
+    theme: spacelab
+---
+
+Abstract: The purpose of this project is to determine if there may be a relationship between someone's race and their confidence in the educational institutions of the United States. To accomplish this analysis, we will make use of the General Social Survey (GSS) Cumulative File 1972-2012. The variables in the dataset that we will explore are "CONEDUC" (CONFIDENCE IN EDUCATION), RACE (RACE OF RESPONDENT), and YEAR (GSS YEAR FOR THIS RESPONDENT). Initially, I expected that respondents who were black would have lower confidence in the educational institions than respondents of other races. However, it turns out that black respondents had the highest likelihood to report "A Great Deal" of confidence in USA educational institutions.
+
+### Load packages
+
+```{r load-packages, message = FALSE}
+library(ggplot2)
+library(dplyr)
+library(statsr)
+```
+
+## Part 1: Data
+The observations in the dataset were collected via a survey from 1972-2012. The population was randomly sampled, such that inferences based on the dataset will be generalizable to the populaion. However, because the survey is voluntary, there is some bias in the dataset as some respondents chose not to answer the survey. 
+
+### Load dataset
+```{r load-data}
+load("gss.Rdata")
+```
+
+## Part 2: Research question
+I would like to explore if there is any relation between the respondents race in the dataset versus their confidence in the educational institutions in the USA. Specifically, I would like to identify if there is any difference between the likelihood of respondents who reported their race as black or white to report "A Great Deal" of confidence in schools. In other words, is the race of the respondent independent of their level of confidence.
+
+## Part 3: Exploratory Data Analysis
+Lets make some plot of the data to understand some of the relationships. For instance, what are the distibrution of different races in the data?
+```{r}
+ggplot(data = gss, aes(x=race)) + geom_bar()
+```
+
+The vast majority of respondents are white (> 40,000 observations), whereas the races "Black", and "Other" have above 7000 and 2000 observations respectively. 
+
+How many observations in the data set were recorded in each year? We can also make a bar graph similar to what it shown above.
+
+```{r}
+ggplot(data = gss, aes(x=year))+geom_bar()
+```
+
+As we can see, there are a few years where data is missing. It looks like initially in 1972 data was collected each year (with only a few years missing data) until 1993. Following this, data was collected every two years until 2012. 
+
+Finally, we would like to see the distribution of responses for confidence in the educational institutions.
+
+```{r}
+ggplot(data = gss, aes(x=coneduc))+geom_bar()
+```
+
+Greater than 10,000 respondents claimed to have a "Great Deal" of confidence in USA educational institutions, more than 20,000 have "Only Some" confidence, and around 5,000 respondents had "Hardly Any".
+
+Next, we should assess how many observations there are from each category of "race" (White, Black, and Other) that correspond to each category of "coneduc" (A Great Deal, Only Some, and Hardly Any). A 3 by 3 table.
+
+Let's start by filtering down the gss dataset into just the variables we are interested in. Also, we would like to get rid of all the "NA" observations in coneduc.
+
+```{r}
+smalldata = tibble(year=gss$year,race=gss$race,coneduc=gss$coneduc) %>% filter(coneduc != "NA")
+```
+
+Ok great, now the data is more manageable and without the NA factors. Lets construct our table.
+
+```{r}
+sums = smalldata %>% group_by(race,coneduc) %>% summarise(counts=n())
+sums
+```
+
+We should report these numbers in terms of percentages based on race instead of number of observations, e.g. "33% of observations belonging to a category of race believe that..."
+
+```{r}
+race1=sums %>% filter(race == "White")
+race1=race1 %>% mutate(percent = counts/sum(counts))
+race2=sums %>% filter(race == "Black")
+race2=race2 %>% mutate(percent = counts/sum(counts))
+race3=sums %>% filter(race == "Other")
+race3=race3 %>% mutate(percent = counts/sum(counts))
+
+percentages=data.frame(race1_percent=race1$percent,race2_percent=race2$percent,
+                   race3_percent=race3$percent)
+rownames(percentages) = c("A Great Deal", "Only Some", "Hardly Any")
+colnames(percentages) = c("White", "Black", "Other")
+
+percentages
+```
+
+Based on our preliminary exploratory analysis, it appear as if black respondents have the highest confidence in educational institutions in the USA, in which nearly 40% of respondents reported "A Great Deal" of confidence. In contrast, roughly 29% of white respondents reported that they have the same level of confidence.
+
+In the following section, I would like to see if this difference is statistically significant.
+
+## Part 4: Inference
+I would like to see if the difference between those respondents who reported white and black ethnicity and having "A Great Deal" of confidence in educational institutions in the USA is statistically significant.
+
+It seems like we are working with counts here, so methods that normally apply to differences in means, medians, etc. will not apply here. We will use the Chi-Squared test of independence.
+
+To accomplish this I first need a null hypothesis, and an alternative hypothesis.
+
+H0: race and confidence in educational institutions are independent
+HA: race and confidence in educational institutions are dependent
+
+Next, we should verify that the conditions to apply the Central Limit Theorem are satisfied:
+
+Does the data satisfy the quality of independence? 
+Yes, the observations were collected randomly, although there may be some bias in the respondents that replied to the survey. Additionally, the data collected in each category represents less than 10% of the total population.
+
+We will use one of the methods taught in this course: The Chi-Squared test for Independence. This method is used because our raw data can sorted by counting the instances of each race/confidence level category, and we would like to test if there is any dependence between these two variables. We will estimate the p-value for rejecting out null hypothesis H0.
+
+Now we will use R to perform a statistical inference.
+
+```{r}
+infdata = data.frame(race=gss$race,coneduc=gss$coneduc) %>% filter(coneduc != "NA") %>% filter(race != "Other")
+infdata = infdata %>% mutate(infcat = ifelse(coneduc=="A Great Deal","A Great Deal","Other"))
+
+inference(y = infcat, x = race, data = infdata,success = "A Great Deal", statistic = "proportion", type = "ht", method = "theoretical", sig_level = 0.05, alternative = "greater")
+```
+
+Because we are only working with two races here, the degrees of freedom are equal to two minus one. The results of the chi-squared test indicate that Chi^2 takes on a value of 248.11.
+
+```{r}
+pchisq(248.111,2,lower.tail = FALSE)
+```
+
+The p-value for this test is extremely low! We can reject the null hypothesis that race and confidence in educational institutions are independent. The two variables seem likely to be dependent.
